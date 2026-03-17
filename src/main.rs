@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 
-use codegraph::extract;
+use codegraph::extract::{self, RefKind};
 use codegraph::graph::{CodeGraph, EdgeKind, NodeKind, SymbolKind};
 use codegraph::parse;
 use codegraph::render::{self, Format};
@@ -46,7 +46,7 @@ enum Commands {
         /// Traversal direction: in, out, both
         #[arg(long, default_value = "both")]
         direction: Direction,
-        /// Edge kind filter: call, import, all
+        /// Edge kind filter: call, ref, import, all
         #[arg(long, default_value = "call")]
         kind: String,
         /// Output format: d2, mermaid
@@ -100,6 +100,23 @@ fn build_graph(path: &PathBuf) -> Result<CodeGraph> {
             }
         }
 
+        for reference in &result.references {
+            let Some(scope) = &reference.enclosing_scope else {
+                continue;
+            };
+            let Some(&from) = symbol_indices.get(scope) else {
+                continue;
+            };
+            let Some(&to) = symbol_indices.get(&reference.symbol_name) else {
+                continue;
+            };
+            let edge_kind = match reference.kind {
+                RefKind::Read => EdgeKind::ReadsFrom,
+                RefKind::Write => EdgeKind::WritesTo,
+            };
+            graph.add_reference(from, to, edge_kind);
+        }
+
         let src_path = file.canonicalize().unwrap_or_else(|_| file.clone());
         let src_path_str = src_path.to_string_lossy().to_string();
 
@@ -141,9 +158,12 @@ fn main() -> Result<()> {
             let export_count = graph.graph.edge_references()
                 .filter(|e| *e.weight() == EdgeKind::Exports)
                 .count();
+            let reference_count = graph.graph.edge_references()
+                .filter(|e| matches!(e.weight(), EdgeKind::ReadsFrom | EdgeKind::WritesTo))
+                .count();
             println!(
-                "Indexed {} symbols, {} calls, {} imports, {} exports",
-                symbol_count, call_count, import_count, export_count
+                "Indexed {} symbols, {} calls, {} imports, {} exports, {} references",
+                symbol_count, call_count, import_count, export_count, reference_count
             );
         }
         Commands::List { path, kind } => {
@@ -171,8 +191,15 @@ fn main() -> Result<()> {
 
             let edge_filter: HashSet<EdgeKind> = match kind.as_str() {
                 "call" => HashSet::from([EdgeKind::Calls]),
+                "ref" => HashSet::from([EdgeKind::ReadsFrom, EdgeKind::WritesTo]),
                 "import" => HashSet::from([EdgeKind::Imports, EdgeKind::Exports]),
-                "all" => HashSet::from([EdgeKind::Calls, EdgeKind::Imports, EdgeKind::Exports]),
+                "all" => HashSet::from([
+                    EdgeKind::Calls,
+                    EdgeKind::Imports,
+                    EdgeKind::Exports,
+                    EdgeKind::ReadsFrom,
+                    EdgeKind::WritesTo,
+                ]),
                 other => {
                     eprintln!("Unknown kind: {other}");
                     std::process::exit(1);

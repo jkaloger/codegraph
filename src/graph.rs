@@ -3,6 +3,7 @@ use std::fmt;
 use std::str::FromStr;
 
 use petgraph::graph::{DiGraph, NodeIndex};
+use petgraph::visit::EdgeRef;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum SymbolKind {
@@ -65,6 +66,20 @@ pub enum EdgeKind {
     Calls,
     Imports,
     Exports,
+    ReadsFrom,
+    WritesTo,
+}
+
+impl fmt::Display for EdgeKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            EdgeKind::Calls => write!(f, "[call]"),
+            EdgeKind::Imports => write!(f, "[import]"),
+            EdgeKind::Exports => write!(f, "[export]"),
+            EdgeKind::ReadsFrom => write!(f, "[read]"),
+            EdgeKind::WritesTo => write!(f, "[write]"),
+        }
+    }
 }
 
 pub struct CodeGraph {
@@ -105,6 +120,22 @@ impl CodeGraph {
 
     pub fn add_export(&mut self, from: NodeIndex, to: NodeIndex) {
         self.graph.add_edge(from, to, EdgeKind::Exports);
+    }
+
+    pub fn add_reference(&mut self, from: NodeIndex, to: NodeIndex, kind: EdgeKind) {
+        assert!(
+            matches!(kind, EdgeKind::ReadsFrom | EdgeKind::WritesTo),
+            "not a reference edge kind: {kind:?}"
+        );
+        self.graph.add_edge(from, to, kind);
+    }
+
+    pub fn references_of(&self, node: NodeIndex) -> Vec<(NodeIndex, &EdgeKind)> {
+        self.graph
+            .edges_directed(node, petgraph::Direction::Incoming)
+            .filter(|e| matches!(e.weight(), EdgeKind::ReadsFrom | EdgeKind::WritesTo))
+            .map(|e| (e.source(), e.weight()))
+            .collect()
     }
 
     pub fn symbols(&self) -> impl Iterator<Item = &SymbolNode> {

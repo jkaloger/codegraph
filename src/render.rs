@@ -71,7 +71,7 @@ pub fn render_d2(trace: &TraceResult, graph: &CodeGraph) -> String {
         let weight = &graph.graph[*edge_idx];
         writeln!(
             output,
-            "node_{} -> node_{}: \"{:?}\"",
+            "node_{} -> node_{}: \"{}\"",
             source.index(),
             target.index(),
             weight,
@@ -123,7 +123,7 @@ pub fn render_mermaid(trace: &TraceResult, graph: &CodeGraph) -> String {
         let weight = &graph.graph[*edge_idx];
         writeln!(
             output,
-            "    node_{} -->|\"{:?}\"| node_{}",
+            "    node_{} -->|\"{}\"| node_{}",
             source.index(),
             weight,
             target.index(),

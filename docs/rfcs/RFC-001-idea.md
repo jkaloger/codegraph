@@ -1,11 +1,12 @@
 ---
 title: "codegraph: symbol & call graph explorer"
 type: rfc
-status: draft
+status: accepted
 author: "unknown"
 date: 2026-03-17
 tags: [rust, tree-sitter, developer-tools]
 ---
+
 
 ## Problem
 

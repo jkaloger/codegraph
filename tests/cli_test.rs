@@ -134,8 +134,8 @@ fn trace_kind_import_includes_only_import_edges() {
     let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
     assert!(stdout.contains("utils.ts"), "should contain imported file: {stdout}");
     assert!(stdout.contains("app.ts"), "should contain importing file: {stdout}");
-    assert!(stdout.contains("Imports"), "should show import edge kind: {stdout}");
-    assert!(!stdout.contains("Calls"), "should not contain call edges: {stdout}");
+    assert!(stdout.contains("[import]"), "should show import edge kind: {stdout}");
+    assert!(!stdout.contains("[call]"), "should not contain call edges: {stdout}");
 }
 
 #[test]
@@ -150,7 +150,7 @@ fn trace_kind_import_excludes_call_edges() {
         .success();
 
     let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
-    assert!(!stdout.contains("\"Calls\""), "call edges must be excluded: {stdout}");
+    assert!(!stdout.contains("[call]"), "call edges must be excluded: {stdout}");
 }
 
 #[test]
@@ -168,8 +168,8 @@ fn render_kind_import_produces_d2_with_file_nodes() {
     assert!(stdout.contains("utils.ts"), "should contain file node: {stdout}");
     assert!(stdout.contains("app.ts"), "should contain file node: {stdout}");
     assert!(stdout.contains("->"), "d2 uses -> for edges: {stdout}");
-    assert!(stdout.contains("Imports"), "should show import edges: {stdout}");
-    assert!(!stdout.contains("Calls"), "should not contain call edges: {stdout}");
+    assert!(stdout.contains("[import]"), "should show import edges: {stdout}");
+    assert!(!stdout.contains("[call]"), "should not contain call edges: {stdout}");
 }
 
 #[test]
@@ -183,6 +183,74 @@ fn render_default_kind_is_import() {
         .assert()
         .success()
         .stdout(predicate::str::contains("->"));
+}
+
+fn fixture_with_calls_and_refs() -> TempDir {
+    let tmp = TempDir::new().unwrap();
+    // `config` is a variable; `init` reads it; `update` writes to it
+    fs::write(
+        tmp.path().join("app.ts"),
+        r#"const config = {};
+function init() { console.log(config); }
+function update() { config = { new: true }; }
+function caller() { init(); }
+"#,
+    )
+    .unwrap();
+    tmp
+}
+
+#[test]
+fn trace_kind_ref_shows_only_reference_edges() {
+    let tmp = fixture_with_calls_and_refs();
+
+    let output = Command::cargo_bin("codegraph")
+        .unwrap()
+        .args(["trace", "config", "--kind", "ref", "--depth", "2"])
+        .arg(tmp.path())
+        .assert()
+        .success();
+
+    let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
+    assert!(
+        stdout.contains("[read]") || stdout.contains("[write]"),
+        "should contain reference edges: {stdout}"
+    );
+    assert!(!stdout.contains("[call]"), "should not contain call edges: {stdout}");
+}
+
+#[test]
+fn trace_kind_all_shows_call_and_reference_edges() {
+    let tmp = fixture_with_calls_and_refs();
+
+    let output = Command::cargo_bin("codegraph")
+        .unwrap()
+        .args(["trace", "init", "--kind", "all", "--depth", "2"])
+        .arg(tmp.path())
+        .assert()
+        .success();
+
+    let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
+    // init is called by caller (call edge) and reads config (read edge)
+    assert!(stdout.contains("[call]"), "should contain call edges: {stdout}");
+    assert!(stdout.contains("[read]"), "should contain read edges: {stdout}");
+}
+
+#[test]
+fn trace_kind_call_returns_no_edges_for_ref_only_symbol() {
+    let tmp = fixture_with_calls_and_refs();
+
+    let output = Command::cargo_bin("codegraph")
+        .unwrap()
+        .args(["trace", "config", "--kind", "call", "--depth", "2"])
+        .arg(tmp.path())
+        .assert()
+        .success();
+
+    let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
+    // config has no call edges, so trace with --kind call should have no edges
+    assert!(!stdout.contains("[call]"), "should have no call edges: {stdout}");
+    assert!(!stdout.contains("->"), "should have no edges at all: {stdout}");
 }
 
 #[test]

@@ -43,7 +43,7 @@ fn render_edge_label_contains_calls() {
     let d2 = render_d2(&result, &cg);
 
     assert!(d2.contains("node_0 -> node_1"));
-    assert!(d2.contains("Calls"));
+    assert!(d2.contains("[call]"));
 }
 
 #[test]
@@ -135,7 +135,7 @@ fn mermaid_edge_format() {
     let result = trace(&cg, a, 1, &Direction::Out, &all_edges());
     let mmd = render_mermaid(&result, &cg);
 
-    assert!(mmd.contains("node_0 -->|\"Calls\"| node_1"));
+    assert!(mmd.contains("node_0 -->|\"[call]\"| node_1"));
 }
 
 #[test]
@@ -153,8 +153,8 @@ fn mermaid_includes_all_traced_nodes_and_edges() {
     assert!(mmd.contains("node_0"));
     assert!(mmd.contains("node_1"));
     assert!(mmd.contains("node_2"));
-    assert!(mmd.contains("node_0 -->|\"Calls\"| node_1"));
-    assert!(mmd.contains("node_1 -->|\"Calls\"| node_2"));
+    assert!(mmd.contains("node_0 -->|\"[call]\"| node_1"));
+    assert!(mmd.contains("node_1 -->|\"[call]\"| node_2"));
 }
 
 #[test]
