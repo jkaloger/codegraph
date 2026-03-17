@@ -55,6 +55,9 @@ enum Commands {
         /// Output file path (prints to stdout if omitted)
         #[arg(long)]
         output: Option<PathBuf>,
+        /// Enable d2 layer linking for drill-down subgraphs
+        #[arg(long, default_value = "false")]
+        layers: bool,
     },
     /// Render a file-level dependency diagram
     Render {
@@ -69,6 +72,9 @@ enum Commands {
         /// Output file path (prints to stdout if omitted)
         #[arg(long)]
         output: Option<PathBuf>,
+        /// Enable d2 layer linking for drill-down subgraphs
+        #[arg(long, default_value = "false")]
+        layers: bool,
     },
 }
 
@@ -186,7 +192,12 @@ fn main() -> Result<()> {
             kind,
             format,
             output,
+            layers,
         } => {
+            if layers && format == Format::Mermaid {
+                eprintln!("layers are only supported with d2 format");
+                std::process::exit(1);
+            }
             let graph = build_graph(&path)?;
 
             let edge_filter: HashSet<EdgeKind> = match kind.as_str() {
@@ -213,7 +224,11 @@ fn main() -> Result<()> {
             };
 
             let trace_result = traverse::trace(&graph, start, depth, &direction, &edge_filter);
-            let content = render::render(&trace_result, &graph, format);
+            let content = if layers {
+                render::render_d2_layers(&trace_result, &graph, start, depth, &direction, &edge_filter)
+            } else {
+                render::render(&trace_result, &graph, format)
+            };
             render::write_output(&content, output.as_deref())?;
         }
         Commands::Render {
@@ -221,7 +236,12 @@ fn main() -> Result<()> {
             kind,
             format,
             output,
+            layers,
         } => {
+            if layers && format == Format::Mermaid {
+                eprintln!("layers are only supported with d2 format");
+                std::process::exit(1);
+            }
             let graph = build_graph(&path)?;
 
             let edge_filter: HashSet<EdgeKind> = match kind.as_str() {
@@ -234,7 +254,11 @@ fn main() -> Result<()> {
             };
 
             let trace_result = collect_edges_by_kind(&graph, &edge_filter);
-            let content = render::render(&trace_result, &graph, format);
+            let content = if layers {
+                render::render_d2_file_layers(&trace_result, &graph)
+            } else {
+                render::render(&trace_result, &graph, format)
+            };
             render::write_output(&content, output.as_deref())?;
         }
     }

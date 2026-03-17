@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 
 use codegraph::graph::{CodeGraph, EdgeKind, SymbolKind, SymbolNode};
-use codegraph::render::{render, render_d2, render_mermaid, Format};
-use codegraph::traverse::{trace, Direction};
+use codegraph::render::{render, render_d2, render_d2_file_layers, render_d2_layers, render_mermaid, Format};
+use codegraph::traverse::{trace, Direction, TraceResult};
 
 fn make_symbol(name: &str, kind: SymbolKind, file_path: &str, line: usize) -> SymbolNode {
     SymbolNode {
@@ -191,4 +191,109 @@ fn render_dispatcher_selects_mermaid() {
     let via_direct = render_mermaid(&result, &cg);
 
     assert_eq!(via_dispatcher, via_direct);
+}
+
+#[test]
+fn test_render_d2_layers_produces_layers_block() {
+    let mut cg = CodeGraph::new();
+    let a = cg.add_symbol(make_symbol("a", SymbolKind::Function, "a.ts", 1));
+    let b = cg.add_symbol(make_symbol("b", SymbolKind::Function, "b.ts", 1));
+    let c = cg.add_symbol(make_symbol("c", SymbolKind::Function, "c.ts", 1));
+    let d = cg.add_symbol(make_symbol("d", SymbolKind::Function, "d.ts", 1));
+    cg.add_call(a, b);
+    cg.add_call(b, c);
+    cg.add_call(c, d);
+
+    let result = trace(&cg, a, 2, &Direction::Out, &all_edges());
+    let output = render_d2_layers(&result, &cg, a, 2, &Direction::Out, &all_edges());
+
+    assert!(output.contains("layers: {"), "should contain layers block: {output}");
+    assert!(output.contains("link: layers."), "should contain layer link: {output}");
+}
+
+#[test]
+fn test_render_d2_layers_suppresses_redundant() {
+    let mut cg = CodeGraph::new();
+    let a = cg.add_symbol(make_symbol("a", SymbolKind::Function, "a.ts", 1));
+    let b = cg.add_symbol(make_symbol("b", SymbolKind::Function, "b.ts", 1));
+    cg.add_call(a, b);
+
+    let result = trace(&cg, a, 1, &Direction::Out, &all_edges());
+    let output = render_d2_layers(&result, &cg, a, 1, &Direction::Out, &all_edges());
+
+    assert!(!output.contains("layers: {"), "should not contain layers block (redundant): {output}");
+}
+
+#[test]
+fn test_render_d2_file_layers_produces_drill_down() {
+    let mut cg = CodeGraph::new();
+    let sym_a = cg.add_symbol(make_symbol("funcA", SymbolKind::Function, "src/mod.ts", 1));
+    let sym_b = cg.add_symbol(make_symbol("funcB", SymbolKind::Function, "src/mod.ts", 10));
+    cg.add_call(sym_a, sym_b);
+
+    let file_node = cg.add_file("src/mod.ts");
+    let other_file = cg.add_file("src/other.ts");
+    cg.add_import(file_node, other_file);
+
+    let mut node_indices = HashSet::new();
+    node_indices.insert(file_node);
+    node_indices.insert(other_file);
+
+    let mut edge_indices = HashSet::new();
+    for edge in cg.graph.edge_references() {
+        use petgraph::visit::EdgeRef;
+        if *edge.weight() == EdgeKind::Imports {
+            if node_indices.contains(&edge.source()) && node_indices.contains(&edge.target()) {
+                edge_indices.insert(edge.id());
+            }
+        }
+    }
+
+    let trace_result = TraceResult {
+        node_indices,
+        edge_indices,
+    };
+
+    let output = render_d2_file_layers(&trace_result, &cg);
+
+    assert!(output.contains("layers: {"), "should contain layers block: {output}");
+    assert!(output.contains("link: layers."), "should contain layer link for file: {output}");
+    assert!(output.contains("funcA"), "layer should contain funcA: {output}");
+    assert!(output.contains("funcB"), "layer should contain funcB: {output}");
+}
+
+#[test]
+fn test_render_d2_file_layers_no_layer_for_empty_file() {
+    let mut cg = CodeGraph::new();
+    let sym_a = cg.add_symbol(make_symbol("funcA", SymbolKind::Function, "src/mod.ts", 1));
+    let sym_b = cg.add_symbol(make_symbol("funcB", SymbolKind::Function, "src/other.ts", 1));
+
+    let file_a = cg.add_file("src/mod.ts");
+    let file_b = cg.add_file("src/other.ts");
+    cg.add_import(file_a, file_b);
+
+    let mut node_indices = HashSet::new();
+    node_indices.insert(file_a);
+    node_indices.insert(file_b);
+
+    let mut edge_indices = HashSet::new();
+    for edge in cg.graph.edge_references() {
+        use petgraph::visit::EdgeRef;
+        if *edge.weight() == EdgeKind::Imports {
+            edge_indices.insert(edge.id());
+        }
+    }
+
+    let trace_result = TraceResult {
+        node_indices,
+        edge_indices,
+    };
+
+    let output = render_d2_file_layers(&trace_result, &cg);
+
+    assert!(!output.contains("layers: {"), "should not contain layers (no internal calls): {output}");
+
+    // suppress unused warnings
+    let _ = sym_a;
+    let _ = sym_b;
 }
