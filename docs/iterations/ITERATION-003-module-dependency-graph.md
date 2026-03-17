@@ -1,13 +1,14 @@
 ---
 title: Module dependency graph
 type: iteration
-status: draft
+status: accepted
 author: agent
 date: 2026-03-17
 tags: []
 related:
 - implements: docs/stories/STORY-003-module-dependency-graph.md
 ---
+
 
 
 ## Test Plan

@@ -1,13 +1,14 @@
 ---
 title: Project indexing
 type: story
-status: draft
+status: accepted
 author: unknown
 date: 2026-03-17
 tags: []
 related:
 - implements: docs/rfcs/RFC-001-idea.md
 ---
+
 
 
 ## Context

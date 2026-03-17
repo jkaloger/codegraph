@@ -1,13 +1,14 @@
 ---
 title: Symbol trace
 type: iteration
-status: draft
+status: accepted
 author: agent
 date: 2026-03-17
 tags: []
 related:
 - implements: docs/stories/STORY-002-symbol-trace.md
 ---
+
 
 
 ## Test Plan
